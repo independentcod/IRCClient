@@ -18,19 +18,10 @@
 #include "IRCSocket.h"
 #include "IRCClient.h"
 #include "IRCHandler.h"
-
-std::vector<std::string> split(std::string const& text, char sep)
-{
-    std::vector<std::string> tokens;
-    size_t start = 0, end = 0;
-    while ((end = text.find(sep, start)) != std::string::npos)
-    {
-        tokens.push_back(text.substr(start, end - start));
-        start = end + 1;
-    }
-    tokens.push_back(text.substr(start));
-    return tokens;
-}
+#include <string>
+using namespace std;
+int sockfd; 
+int nsockfd;
 
 bool IRCClient::InitSocket()
 {
@@ -57,19 +48,17 @@ bool IRCClient::Login(std::string nick, std::string user, std::string password)
 {
     _nick = nick;
     _user = user;
-
+        string(input) = fopen("Hello.txt", "rb");
     if (SendIRC("HELLO"))
     {
         if (!password.empty() && !SendIRC("PASS "+password))
             return false;
         if (SendIRC("NICK " + nick))
-            if (SendIRC("USER " + user + " 8 * :Cpp IRC Client"))
-                return true;
+            if (SendIRC("USER " + user + " 8 * :Cpp IRC Client")) {
+
     }
-
-    return false;
 }
-
+}
 void IRCClient::ReceiveData()
 {
     std::string buffer = _socket.ReceiveData();
